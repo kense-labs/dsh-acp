@@ -1,0 +1,528 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/cli"
+    },
+    {
+      "path": "./native/system/packages/entry"
+    },
+    {
+      "path": "./packages/acp/acp"
+    },
+    {
+      "path": "./packages/api/gateway/tsconfig.host.json"
+    },
+    {
+      "path": "./packages/api/remote-access/tsconfig.host.json"
+    },
+    {
+      "path": "./packages/attachment/attachment"
+    },
+    {
+      "path": "./packages/attachment/attachment-local"
+    },
+    {
+      "path": "./packages/boot/app-boot"
+    },
+    {
+      "path": "./packages/boot/cmdline"
+    },
+    {
+      "path": "./packages/boot/config-editor"
+    },
+    {
+      "path": "./packages/boot/hmr"
+    },
+    {
+      "path": "./packages/boot/plugin-manager"
+    },
+    {
+      "path": "./packages/bundle/acp-app"
+    },
+    {
+      "path": "./packages/bundle/base"
+    },
+    {
+      "path": "./packages/client/connection/tsconfig.host.json"
+    },
+    {
+      "path": "./packages/client/store"
+    },
+    {
+      "path": "./packages/client/ui-renderer"
+    },
+    {
+      "path": "./packages/client/ui-slots"
+    },
+    {
+      "path": "./packages/compaction/command-compact"
+    },
+    {
+      "path": "./packages/compaction/compaction"
+    },
+    {
+      "path": "./packages/compaction/compaction-basic"
+    },
+    {
+      "path": "./packages/compaction/compaction-image-offload"
+    },
+    {
+      "path": "./packages/compaction/compaction-tool-result-pruner"
+    },
+    {
+      "path": "./packages/context/agent-instructions"
+    },
+    {
+      "path": "./packages/core/agent"
+    },
+    {
+      "path": "./packages/core/agent-default-model"
+    },
+    {
+      "path": "./packages/core/agent-loop"
+    },
+    {
+      "path": "./packages/core/scope"
+    },
+    {
+      "path": "./packages/core/session"
+    },
+    {
+      "path": "./packages/core/system-prompt"
+    },
+    {
+      "path": "./packages/core/tool-executor-native"
+    },
+    {
+      "path": "./packages/core/tool-executor-ptc"
+    },
+    {
+      "path": "./packages/core/tools"
+    },
+    {
+      "path": "./packages/credentials/authorization"
+    },
+    {
+      "path": "./packages/credentials/credentials"
+    },
+    {
+      "path": "./packages/credentials/credentials-local"
+    },
+    {
+      "path": "./packages/credentials/deepseek-account"
+    },
+    {
+      "path": "./packages/credentials/deepseek-account-platform"
+    },
+    {
+      "path": "./packages/deliverables/tool-present"
+    },
+    {
+      "path": "./packages/feedback/command-feedback"
+    },
+    {
+      "path": "./packages/feedback/message-feedback"
+    },
+    {
+      "path": "./packages/fs/fs"
+    },
+    {
+      "path": "./packages/fs/fs-local"
+    },
+    {
+      "path": "./packages/fs/fs-observation-policy"
+    },
+    {
+      "path": "./packages/fs/fs-patch"
+    },
+    {
+      "path": "./packages/fs/fs-sandbox"
+    },
+    {
+      "path": "./packages/fs/tool-fs"
+    },
+    {
+      "path": "./packages/fs/tool-fs-search"
+    },
+    {
+      "path": "./packages/goal/command-goal"
+    },
+    {
+      "path": "./packages/goal/goal"
+    },
+    {
+      "path": "./packages/goal/goal-round-driver"
+    },
+    {
+      "path": "./packages/goal/tool-goal"
+    },
+    {
+      "path": "./packages/guard/repeat-tool-reminder"
+    },
+    {
+      "path": "./packages/guard/timeout-policy"
+    },
+    {
+      "path": "./packages/host/plugin-inventory"
+    },
+    {
+      "path": "./packages/host/webserver"
+    },
+    {
+      "path": "./packages/identity/anonymous-user-id"
+    },
+    {
+      "path": "./packages/interaction/commands"
+    },
+    {
+      "path": "./packages/interaction/permission-presets"
+    },
+    {
+      "path": "./packages/interaction/user-approval"
+    },
+    {
+      "path": "./packages/interaction/user-questions"
+    },
+    {
+      "path": "./packages/jobs/jobs"
+    },
+    {
+      "path": "./packages/jobs/jobs-local"
+    },
+    {
+      "path": "./packages/jobs/tool-jobs"
+    },
+    {
+      "path": "./packages/llm/deepseek-llm-api-extensions"
+    },
+    {
+      "path": "./packages/llm/llm"
+    },
+    {
+      "path": "./packages/llm/llm-deepseek"
+    },
+    {
+      "path": "./packages/llm/llm-deepseek-account"
+    },
+    {
+      "path": "./packages/llm/llm-deepseek-api-key"
+    },
+    {
+      "path": "./packages/llm/llm-pi-ai"
+    },
+    {
+      "path": "./packages/llm/llm-retry"
+    },
+    {
+      "path": "./packages/llm/plugin-package-inventory-deepseek"
+    },
+    {
+      "path": "./packages/llm/token-meter"
+    },
+    {
+      "path": "./packages/mcp/mcp-client"
+    },
+    {
+      "path": "./packages/mcp/mcp-resources"
+    },
+    {
+      "path": "./packages/plan/plan-mode"
+    },
+    {
+      "path": "./packages/preset/agent-preset-registry"
+    },
+    {
+      "path": "./packages/ptc-runtime/ptc-runtime"
+    },
+    {
+      "path": "./packages/ptc-runtime/ptc-runtime-node"
+    },
+    {
+      "path": "./packages/sandbox/sandbox"
+    },
+    {
+      "path": "./packages/sandbox/sandbox-local"
+    },
+    {
+      "path": "./packages/sandbox/sandbox-policy"
+    },
+    {
+      "path": "./packages/sandbox/sandbox-windows-acl"
+    },
+    {
+      "path": "./packages/session-query/session-query"
+    },
+    {
+      "path": "./packages/session-query/session-query-sqlite"
+    },
+    {
+      "path": "./packages/session/session-checkpoint-policy"
+    },
+    {
+      "path": "./packages/session/session-format"
+    },
+    {
+      "path": "./packages/session/session-format-catalog"
+    },
+    {
+      "path": "./packages/session/session-format-v0-to-v1"
+    },
+    {
+      "path": "./packages/session/session-format-v1-to-v2"
+    },
+    {
+      "path": "./packages/session/session-format-v2-to-v3"
+    },
+    {
+      "path": "./packages/session/session-format-v3-to-v4"
+    },
+    {
+      "path": "./packages/session/session-log-deepseek"
+    },
+    {
+      "path": "./packages/session/session-persistence"
+    },
+    {
+      "path": "./packages/session/session-persistence-jsonl"
+    },
+    {
+      "path": "./packages/session/session-projection"
+    },
+    {
+      "path": "./packages/session/session-projection-cache"
+    },
+    {
+      "path": "./packages/session/session-telemetry"
+    },
+    {
+      "path": "./packages/session/session-telemetry-otel"
+    },
+    {
+      "path": "./packages/session/session-title"
+    },
+    {
+      "path": "./packages/session/session-title-first-prompt-llm"
+    },
+    {
+      "path": "./packages/session/session-title-llm"
+    },
+    {
+      "path": "./packages/session/tool-working-directory"
+    },
+    {
+      "path": "./packages/session/working-directory"
+    },
+    {
+      "path": "./packages/settings/settings"
+    },
+    {
+      "path": "./packages/shell/bash-local"
+    },
+    {
+      "path": "./packages/shell/bash-sandbox"
+    },
+    {
+      "path": "./packages/shell/pwsh-local"
+    },
+    {
+      "path": "./packages/shell/pwsh-sandbox"
+    },
+    {
+      "path": "./packages/shell/shell"
+    },
+    {
+      "path": "./packages/shell/shell-env"
+    },
+    {
+      "path": "./packages/shell/tool-bash"
+    },
+    {
+      "path": "./packages/shell/tool-pwsh"
+    },
+    {
+      "path": "./packages/skill/skill"
+    },
+    {
+      "path": "./packages/skill/skill-filesystem"
+    },
+    {
+      "path": "./packages/skill/tool-skill"
+    },
+    {
+      "path": "./packages/spill/spill"
+    },
+    {
+      "path": "./packages/spill/spill-local"
+    },
+    {
+      "path": "./packages/spill/spill-policy"
+    },
+    {
+      "path": "./packages/storage/storage"
+    },
+    {
+      "path": "./packages/storage/storage-domain"
+    },
+    {
+      "path": "./packages/storage/storage-json"
+    },
+    {
+      "path": "./packages/subagent/subagent"
+    },
+    {
+      "path": "./packages/subagent/subagent-fork-in-process"
+    },
+    {
+      "path": "./packages/subagent/subagent-spawn-in-process"
+    },
+    {
+      "path": "./packages/subagent/tool-subagent"
+    },
+    {
+      "path": "./packages/subagent/tool-subagent-control"
+    },
+    {
+      "path": "./packages/subprocess/subprocess"
+    },
+    {
+      "path": "./packages/subprocess/subprocess-local"
+    },
+    {
+      "path": "./packages/subprocess/win32-process"
+    },
+    {
+      "path": "./packages/team/agent-team"
+    },
+    {
+      "path": "./packages/team/tool-agent-team"
+    },
+    {
+      "path": "./packages/telemetry/otel"
+    },
+    {
+      "path": "./packages/test-support/agent-loop-testkit"
+    },
+    {
+      "path": "./packages/test-support/tool-testkit"
+    },
+    {
+      "path": "./packages/todo/tool-todo"
+    },
+    {
+      "path": "./packages/typert/generator"
+    },
+    {
+      "path": "./packages/typert/loader"
+    },
+    {
+      "path": "./packages/typert/protocol"
+    },
+    {
+      "path": "./packages/typert/registry"
+    },
+    {
+      "path": "./packages/util/atomic-write"
+    },
+    {
+      "path": "./packages/util/brand"
+    },
+    {
+      "path": "./packages/util/chunked-list"
+    },
+    {
+      "path": "./packages/util/code-language"
+    },
+    {
+      "path": "./packages/util/crypto"
+    },
+    {
+      "path": "./packages/util/deque"
+    },
+    {
+      "path": "./packages/util/home-paths"
+    },
+    {
+      "path": "./packages/util/http-proxy"
+    },
+    {
+      "path": "./packages/util/launch-environment"
+    },
+    {
+      "path": "./packages/util/lazy-require"
+    },
+    {
+      "path": "./packages/util/official-bundles"
+    },
+    {
+      "path": "./packages/util/output-retention"
+    },
+    {
+      "path": "./packages/util/package-manifest"
+    },
+    {
+      "path": "./packages/util/plugin-detail"
+    },
+    {
+      "path": "./packages/util/time"
+    },
+    {
+      "path": "./packages/util/timeout"
+    },
+    {
+      "path": "./packages/util/values"
+    },
+    {
+      "path": "./packages/web/tool-web"
+    },
+    {
+      "path": "./packages/web/web"
+    },
+    {
+      "path": "./packages/web/web-deepseek-api"
+    },
+    {
+      "path": "./packages/web/web-fetch-http"
+    },
+    {
+      "path": "./packages/web/web-search-deepseek"
+    },
+    {
+      "path": "./packages/workflow/tool-workflow"
+    },
+    {
+      "path": "./packages/workflow/workflow"
+    },
+    {
+      "path": "./packages/workflow/workflow-ptc"
+    },
+    {
+      "path": "./packages/workspace/workspace"
+    },
+    {
+      "path": "./vendor/cordis"
+    },
+    {
+      "path": "./vendor/cosmokit"
+    },
+    {
+      "path": "./vendor/group"
+    },
+    {
+      "path": "./vendor/include"
+    },
+    {
+      "path": "./vendor/loader"
+    },
+    {
+      "path": "./vendor/schemastery"
+    },
+    {
+      "path": "./vendor/timer"
+    }
+  ]
+}

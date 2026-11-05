@@ -1,0 +1,51 @@
+{
+  "name": "@deepseek-ai/dsh",
+  "description": "DeepSeek Harness ACP stdio launcher",
+  "version": "0.2.2-rc.1",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kense-labs/dsh-acp.git",
+    "directory": "apps/cli"
+  },
+  "type": "module",
+  "bin": {
+    "dsh": "lib/bin.js",
+    "dsh-acp": "lib/bin.js"
+  },
+  "files": [
+    "lib/*.js",
+    "lib/types/*.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/cordis-plugin-timer": "workspace:~",
+    "@deepseek-ai/dsh-acp-app": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-base": "workspace:*",
+    "@deepseek-ai/dsh-cmdline": "workspace:*",
+    "@deepseek-ai/dsh-home-paths": "workspace:*",
+    "@deepseek-ai/dsh-http-proxy": "workspace:*",
+    "@deepseek-ai/dsh-launch-environment": "workspace:*",
+    "@deepseek-ai/dsh-official-bundles": "workspace:*",
+    "@deepseek-ai/dsh-plugin-manager": "workspace:*",
+    "commander": "^15.0.0"
+  },
+  "exports": {
+    "./profile-boot": {
+      "types": "./lib/types/profile-boot.d.ts",
+      "default": "./lib/profile-boot.js"
+    },
+    "./lib/*": "./lib/*",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24.9.0"
+  }
+}

@@ -1,0 +1,11 @@
+.env
+node_modules/
+lib/
+*.tsbuildinfo
+*.log
+coverage/
+.cache/
+.pnpm-store/
+.tmp*/
+native/system/.release/
+.DS_Store
