@@ -48,7 +48,16 @@ For repeatable deployments, pin the image digest instead of `latest`.
 
 ## Hello world: send a greeting, get a live model reply
 
-The complete command below requires Bash, `jq`, and kbox. It creates a temporary process-prewarmed pool on a private socket, shows every ACP request, sends the default Chinese greeting, prints the live model reply, verifies the result and exit code, and cleans up without affecting an existing default pool:
+**Option 1: run the repository `.sh` script.** The source is available on GitHub: [dist/bench-pool-dsh-acp.sh](https://github.com/kense-labs/kbox/blob/main/dist/bench-pool-dsh-acp.sh). From a kbox source checkout, run (Python 3 required; the benchmark uses the default pool socket and stops that pool on exit):
+
+```sh
+DEEPSEEK_API_KEY=your_key \
+DSH_MODEL=deepseek-flash \
+DSH_REASONING_EFFORT=low \
+RUNS=1 sh dist/bench-pool-dsh-acp.sh
+```
+
+**Option 2: copy the complete inline command.** This requires Bash, `jq`, and kbox. It creates a temporary process-prewarmed pool on a private socket, shows every ACP request, sends the default Chinese greeting, prints the live model reply, verifies the result and exit code, and cleans up without affecting an existing default pool:
 
 ```bash
 DEEPSEEK_API_KEY=your_key \

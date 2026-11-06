@@ -43,7 +43,16 @@ kbox run -i --rm \
 
 ## Hello world：发一条问候，收到模型真实回复
 
-以下完整命令只需要 Bash、`jq` 和 kbox。它在独立临时 socket 上创建进程预热池，展示每个 ACP 请求，发送默认中文问候，打印模型真实回复，验证结果与退出码，最后清理临时池，不影响已有默认池：
+**方式一：直接运行仓库 `.sh` 脚本。** 脚本源码已发布在 GitHub：[dist/bench-pool-dsh-acp.sh](https://github.com/kense-labs/kbox/blob/main/dist/bench-pool-dsh-acp.sh)。在 kbox 源码目录执行（需要 Python 3；脚本使用默认 pool socket，并在结束后停止该池）：
+
+```sh
+DEEPSEEK_API_KEY=你的密钥 \
+DSH_MODEL=deepseek-flash \
+DSH_REASONING_EFFORT=low \
+RUNS=1 sh dist/bench-pool-dsh-acp.sh
+```
+
+**方式二：复制完整内联命令。** 只需要 Bash、`jq` 和 kbox。它在独立临时 socket 上创建进程预热池，展示每个 ACP 请求，发送默认中文问候，打印模型真实回复，验证结果与退出码，最后清理临时池，不影响已有默认池：
 
 ```bash
 DEEPSEEK_API_KEY=你的密钥 \
