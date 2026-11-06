@@ -26,12 +26,19 @@
 macOS arm64 执行官方一键安装脚本：
 
 ```sh
-curl -fsSL https://github.com/kense-labs/kense/releases/download/kbox-v3.2.7/install.sh | sh
+curl -fsSL https://github.com/kense-labs/kense/releases/download/kbox-v3.3.0/install.sh | sh
 export PATH="$HOME/.kbox/bin:$PATH"
 kbox version
 ```
 
-脚本自动检测操作系统与架构，从 [GitHub Releases](https://github.com/kense-labs/kense/releases/tag/kbox-v3.2.7) 下载对应安装包、校验 SHA-256，并安装到 `~/.kbox`，无需 sudo。将上述 `PATH` 配置写入 shell 配置文件，即可在后续终端直接使用。可选环境变量：`KBOX_VERSION`（默认 `3.2.7`）、`KBOX_PREFIX`（默认 `~/.kbox`）。预编译包目前支持 macOS arm64，其他平台请按照 kbox 文档从源码构建。
+脚本自动检测操作系统与架构，从 [GitHub Releases](https://github.com/kense-labs/kense/releases/tag/kbox-v3.3.0) 下载对应安装包、校验 SHA-256，并安装到 `~/.kbox`，无需 sudo。将上述 `PATH` 配置写入 shell 配置文件，即可在后续终端直接使用。可选环境变量：`KBOX_VERSION`（默认 `3.3.0`）、`KBOX_PREFIX`（默认 `~/.kbox`）。预编译包目前支持 macOS arm64，其他平台请按照 kbox 文档从源码构建。
+
+从 kbox 3.3.0 起，后续升级可直接检查并安装最新稳定版：
+
+```sh
+kbox update --check
+kbox update
+```
 
 ### 在终端测试真实模型回复
 
@@ -249,7 +256,7 @@ TUI/GUI 用户先启动预热池，再将客户端的 agent 命令配置为：
 
 使用 `kbox pool stop` 停止守护进程及池内 VM。不需要后台池时，使用上文的 `kbox run -i --rm`。上文 Hello world 完整命令展示了每个 ACP 请求并验证真实模型回复。下方实测数据分别记录启动、initialize 与模型网络耗时。
 
-2026-11-06 在 macOS arm64、kbox 3.2.7 环境实测。5 次使用 `deepseek-flash`＋`low` 的真实 DeepSeek 会话均返回文本、`end_turn` 和退出码 0。实测镜像 digest：`sha256:4237b8ac59d8ad1fb89ce065877fdd8d02f9114c17412cca8163d4276242fea5`。
+下列五次基准于 2026-11-06 在 macOS arm64、kbox 3.2.7 release build 环境实测，均使用 `deepseek-flash`＋`low`，返回文本、`end_turn` 和退出码 0。实测镜像 digest：`sha256:4237b8ac59d8ad1fb89ce065877fdd8d02f9114c17412cca8163d4276242fea5`。
 
 | 指标 | 最小值 | 中位数 | 最大值 |
 | --- | ---: | ---: | ---: |
@@ -257,6 +264,8 @@ TUI/GUI 用户先启动预热池，再将客户端的 agent 命令配置为：
 | initialize 请求 RTT | 13.822 ms | 17.642 ms | 27.502 ms |
 | 守护进程内部接管（非完整启动） | 0.222 ms | 0.251 ms | 0.313 ms |
 | 模型 prompt RTT（网络请求，非启动指标） | 676.883 ms | 1436.499 ms | 1676.068 ms |
+
+kbox 3.3.0 官方 Release 经线上安装和自更新后，也通过完整 HTTPS 脚本完成一次真实 DeepSeek 会话，返回文本、`end_turn` 和退出码 0。
 
 守护进程内部接管低于 1 ms，不代表完整 CLI 启动或 initialize 为 1 ms。
 

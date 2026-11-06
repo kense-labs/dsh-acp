@@ -28,12 +28,19 @@ The default model is `deepseek-flash` on the `deepseek-official` route. Set `DEE
 On macOS arm64, run the official one-command installer:
 
 ```sh
-curl -fsSL https://github.com/kense-labs/kense/releases/download/kbox-v3.2.7/install.sh | sh
+curl -fsSL https://github.com/kense-labs/kense/releases/download/kbox-v3.3.0/install.sh | sh
 export PATH="$HOME/.kbox/bin:$PATH"
 kbox version
 ```
 
-The installer detects the operating system and architecture, downloads the matching [GitHub Release](https://github.com/kense-labs/kense/releases/tag/kbox-v3.2.7), verifies SHA-256, and installs into `~/.kbox` without sudo. Add the `PATH` line to your shell profile for future terminals. Optional installer variables: `KBOX_VERSION` (default `3.2.7`) and `KBOX_PREFIX` (default `~/.kbox`). The prebuilt package currently supports macOS arm64; other platforms should follow kbox's source-build instructions.
+The installer detects the operating system and architecture, downloads the matching [GitHub Release](https://github.com/kense-labs/kense/releases/tag/kbox-v3.3.0), verifies SHA-256, and installs into `~/.kbox` without sudo. Add the `PATH` line to your shell profile for future terminals. Optional installer variables: `KBOX_VERSION` (default `3.3.0`) and `KBOX_PREFIX` (default `~/.kbox`). The prebuilt package currently supports macOS arm64; other platforms should follow kbox's source-build instructions.
+
+Starting with kbox 3.3.0, later upgrades use the built-in update command:
+
+```sh
+kbox update --check
+kbox update
+```
 
 ### Test a live model reply in your terminal
 
@@ -252,7 +259,7 @@ For a TUI/GUI, start the pool before launching the client and configure its agen
 
 Use `kbox pool stop` to stop the daemon and its pooled VMs. Without a background pool, use `kbox run -i --rm` as shown above. The complete [Hello world command](#hello-world-send-a-greeting-get-a-live-model-reply) shows every ACP request and verifies a live model reply. The measurements below separately record startup and initialize timings apart from model network latency.
 
-Measured on macOS arm64 with kbox 3.2.7 on 2026-11-06. Five real DeepSeek sessions using `deepseek-flash` and `low` all returned text, `end_turn`, and exit code 0. Tested image digest: `sha256:4237b8ac59d8ad1fb89ce065877fdd8d02f9114c17412cca8163d4276242fea5`.
+The following five-session benchmark was measured on macOS arm64 with a kbox 3.2.7 release build on 2026-11-06. Every session used `deepseek-flash` and `low`, returned text with `end_turn`, and exited 0. Tested image digest: `sha256:4237b8ac59d8ad1fb89ce065877fdd8d02f9114c17412cca8163d4276242fea5`.
 
 | Metric | Min | Median | Max |
 | --- | ---: | ---: | ---: |
@@ -260,6 +267,8 @@ Measured on macOS arm64 with kbox 3.2.7 on 2026-11-06. Five real DeepSeek sessio
 | `initialize` request RTT | 13.822 ms | 17.642 ms | 27.502 ms |
 | Daemon-internal attach setup (not full startup) | 0.222 ms | 0.251 ms | 0.313 ms |
 | Model prompt RTT (network, not startup) | 676.883 ms | 1436.499 ms | 1676.068 ms |
+
+The official kbox 3.3.0 Release was also installed from GitHub and self-updated, then completed one real DeepSeek session through the full HTTPS script with text, `end_turn`, and exit code 0.
 
 Sub-millisecond daemon handoff does not mean that complete CLI startup or `initialize` takes 1 ms.
 
