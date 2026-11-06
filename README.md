@@ -37,13 +37,14 @@ The installer detects the operating system and architecture, downloads the match
 
 ### Test a live model reply in your terminal
 
-From the dsh-acp source root, run the test script to see a greeting and model reply immediately:
+Run the test script directly from its full HTTPS URL to see a greeting and model reply without cloning the repository:
 
 ```sh
 DEEPSEEK_API_KEY=your_key \
 DSH_MODEL=deepseek-flash \
 DSH_REASONING_EFFORT=low \
-RUNS=1 sh "$PWD/scripts/bench-pool-dsh-acp.sh"
+RUNS=1 bash -o pipefail -c \
+  'curl -fsSL https://raw.githubusercontent.com/kense-labs/dsh-acp/main/scripts/bench-pool-dsh-acp.sh | sh'
 ```
 
 ### Launch dsh-acp from an ACP client
@@ -73,13 +74,14 @@ For repeatable deployments, pin the image digest instead of `latest`.
 
 ## Hello world: send a greeting, get a live model reply
 
-**Option 1: run this repository's `.sh` script.** The source is available on GitHub: [scripts/bench-pool-dsh-acp.sh](scripts/bench-pool-dsh-acp.sh). From the dsh-acp source root, run (Python 3 required; `$PWD` expands to an absolute path; the benchmark uses the default pool socket and stops that pool on exit):
+**Option 1: run this repository's `.sh` script from its full HTTPS URL.** The source is available on GitHub: [scripts/bench-pool-dsh-acp.sh](scripts/bench-pool-dsh-acp.sh). No clone is needed (Bash, curl, and Python 3 required; the benchmark uses the default pool socket and stops that pool on exit):
 
 ```sh
 DEEPSEEK_API_KEY=your_key \
 DSH_MODEL=deepseek-flash \
 DSH_REASONING_EFFORT=low \
-RUNS=1 sh "$PWD/scripts/bench-pool-dsh-acp.sh"
+RUNS=1 bash -o pipefail -c \
+  'curl -fsSL https://raw.githubusercontent.com/kense-labs/dsh-acp/main/scripts/bench-pool-dsh-acp.sh | sh'
 ```
 
 **Option 2: copy the complete inline command.** This requires Bash, `jq`, and kbox. It creates a temporary process-prewarmed pool on a private socket, shows every ACP request, sends the default Chinese greeting, prints the live model reply, verifies the result and exit code, and cleans up without affecting an existing default pool:
