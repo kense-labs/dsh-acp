@@ -5,7 +5,7 @@
 # real ACP initialize/session/new/session/prompt flow, and sends a greeting to
 # DeepSeek by default. Requires DEEPSEEK_API_KEY in the environment.
 #
-#   sh dist/bench-pool-dsh-acp.sh [path-to-kbox] [greeting]
+#   sh scripts/bench-pool-dsh-acp.sh [path-to-kbox] [greeting]
 set -eu
 
 KBOX="${1:-kbox}"
@@ -14,8 +14,24 @@ export GREETING="${2:-你好！请用一句话介绍你自己。}"
 export RUNS="${RUNS:-5}"
 IMAGE="ghcr.io/kense-labs/dsh-acp:latest"
 export IMAGE
+POOL_LOG="${POOL_LOG:-/dev/stderr}"
 
 : "${DEEPSEEK_API_KEY:?Set DEEPSEEK_API_KEY before running this benchmark}"
+command -v "$KBOX" >/dev/null 2>&1 || {
+  echo "kbox executable not found: $KBOX" >&2
+  exit 1
+}
+case $("$KBOX" pool start --help 2>&1) in
+  *--prewarm*) ;;
+  *)
+    echo "kbox is too old: upgrade to a release with pool start --prewarm and pool attach" >&2
+    exit 1
+    ;;
+esac
+"$KBOX" pool attach --help >/dev/null 2>&1 || {
+  echo "kbox is too old: upgrade to a release with pool start --prewarm and pool attach" >&2
+  exit 1
+}
 
 idle() {
   "$KBOX" pool status --json | python3 -c \
@@ -27,6 +43,11 @@ except Exception: print(0)"
 wait_idle() {
   n=0
   while [ "$(idle)" -lt 1 ]; do
+    if ! kill -0 "$DAEMON" 2>/dev/null; then
+      if wait "$DAEMON"; then status=0; else status=$?; fi
+      echo "pool start exited ($status) before a VM + process became ready; see $POOL_LOG" >&2
+      exit 1
+    fi
     n=$((n + 1))
     [ "$n" -le 90 ] || { echo "timed out waiting for a ready VM + process" >&2; exit 1; }
     sleep 2
@@ -36,7 +57,7 @@ wait_idle() {
 if [ "${REUSE_POOL:-0}" != 1 ]; then
   "$KBOX" pool stop >/dev/null 2>&1 || true
   "$KBOX" pool start --deferred --prewarm --image "$IMAGE" \
-    --size 1 --max 2 -u root -e DEEPSEEK_API_KEY >"${POOL_LOG:-/dev/null}" 2>&1 &
+    --size 1 --max 2 -u root -e DEEPSEEK_API_KEY >"$POOL_LOG" 2>&1 &
   DAEMON=$!
   trap '"$KBOX" pool stop >/dev/null 2>&1 || true; kill "$DAEMON" >/dev/null 2>&1 || true' EXIT INT TERM
   echo "warming VM + dsh-acp process for $IMAGE"
