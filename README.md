@@ -23,7 +23,19 @@ The default model is `deepseek-flash` on the `deepseek-official` route. Set `DEE
 
 [kbox](https://github.com/kense-labs/kbox) runs the agent in an isolated MicroVM. The image is public on GitHub Container Registry — **no registry login required**.
 
-Install kbox from the [kense releases](https://github.com/kense-labs/kense/releases/tag/kbox-v3.2.7), then:
+### Install kbox
+
+On macOS arm64, run the official one-command installer:
+
+```sh
+curl -fsSL https://github.com/kense-labs/kense/releases/download/kbox-v3.2.7/install.sh | sh
+export PATH="$HOME/.kbox/bin:$PATH"
+kbox version
+```
+
+The installer detects the operating system and architecture, downloads the matching [GitHub Release](https://github.com/kense-labs/kense/releases/tag/kbox-v3.2.7), verifies SHA-256, and installs into `~/.kbox` without sudo. Add the `PATH` line to your shell profile for future terminals. Optional installer variables: `KBOX_VERSION` (default `3.2.7`) and `KBOX_PREFIX` (default `~/.kbox`). The prebuilt package currently supports macOS arm64; other platforms should follow kbox's source-build instructions.
+
+Then start dsh-acp:
 
 ```sh
 export DEEPSEEK_API_KEY=your_key

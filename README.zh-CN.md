@@ -19,7 +19,21 @@
 
 ## 用 kbox 运行（推荐）
 
-[kbox](https://github.com/kense-labs/kbox) 在隔离 MicroVM 中运行 agent。先从 [kense Releases](https://github.com/kense-labs/kense/releases/tag/kbox-v3.2.7) 安装 kbox，然后：
+[kbox](https://github.com/kense-labs/kbox) 在隔离 MicroVM 中运行 agent。
+
+### 一键安装 kbox
+
+macOS arm64 执行官方一键安装脚本：
+
+```sh
+curl -fsSL https://github.com/kense-labs/kense/releases/download/kbox-v3.2.7/install.sh | sh
+export PATH="$HOME/.kbox/bin:$PATH"
+kbox version
+```
+
+脚本自动检测操作系统与架构，从 [GitHub Releases](https://github.com/kense-labs/kense/releases/tag/kbox-v3.2.7) 下载对应安装包、校验 SHA-256，并安装到 `~/.kbox`，无需 sudo。将上述 `PATH` 配置写入 shell 配置文件，即可在后续终端直接使用。可选环境变量：`KBOX_VERSION`（默认 `3.2.7`）、`KBOX_PREFIX`（默认 `~/.kbox`）。预编译包目前支持 macOS arm64，其他平台请按照 kbox 文档从源码构建。
+
+安装完成后启动 dsh-acp：
 
 ```sh
 export DEEPSEEK_API_KEY=你的密钥
