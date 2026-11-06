@@ -48,16 +48,121 @@ For repeatable deployments, pin the image digest instead of `latest`.
 
 ## Hello world: send a greeting, get a live model reply
 
-From a kbox source checkout, run one shell command to create a temporary process-prewarmed pool, complete the ACP handshake, send the default Chinese greeting, print the live model reply and metrics, and stop the pool:
+The complete command below requires Bash, `jq`, and kbox. It creates a temporary process-prewarmed pool on a private socket, shows every ACP request, sends the default Chinese greeting, prints the live model reply, verifies the result and exit code, and cleans up without affecting an existing default pool:
 
-```sh
+```bash
 DEEPSEEK_API_KEY=your_key \
 DSH_MODEL=deepseek-flash \
 DSH_REASONING_EFFORT=low \
-RUNS=1 sh dist/bench-pool-dsh-acp.sh
+bash <<'BASH'
+set -euo pipefail
+
+KBOX="${KBOX:-kbox}"
+IMAGE="ghcr.io/kense-labs/dsh-acp:latest"
+DSH_PROVIDER="${DSH_PROVIDER:-deepseek-official}"
+DSH_MODEL="${DSH_MODEL:-deepseek-flash}"
+DSH_REASONING_EFFORT="${DSH_REASONING_EFFORT:-low}"
+GREETING="${GREETING:-你好！请用一句话介绍你自己。}"
+: "${DEEPSEEK_API_KEY:?Set DEEPSEEK_API_KEY first}"
+command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
+case "$DSH_MODEL" in
+  */*) DSH_PROVIDER="${DSH_MODEL%%/*}"; DSH_MODEL="${DSH_MODEL#*/}" ;;
+esac
+
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/dsh-acp-hello.XXXXXX")"
+POOL_SOCKET="$WORK/pool.sock"
+mkfifo "$WORK/acp.in" "$WORK/acp.out"
+POOL_PID=""
+ACP_PID=""
+cleanup() {
+  set +e
+  exec 3>&- 2>/dev/null
+  exec 4>&- 2>/dev/null
+  [[ -z "$ACP_PID" ]] || kill "$ACP_PID" 2>/dev/null
+  [[ -z "$ACP_PID" ]] || wait "$ACP_PID" 2>/dev/null
+  "$KBOX" pool stop --socket "$POOL_SOCKET" >/dev/null 2>&1
+  [[ -z "$POOL_PID" ]] || kill "$POOL_PID" 2>/dev/null
+  [[ -z "$POOL_PID" ]] || wait "$POOL_PID" 2>/dev/null
+  rm -rf -- "$WORK"
+}
+trap cleanup EXIT
+
+"$KBOX" pool start --deferred --prewarm \
+  --socket "$POOL_SOCKET" --image "$IMAGE" \
+  --size 1 --max 1 -u root -e DEEPSEEK_API_KEY \
+  >"$WORK/pool.log" 2>&1 &
+POOL_PID=$!
+
+READY=0
+for ((attempt = 0; attempt < 90; attempt++)); do
+  if "$KBOX" pool status --socket "$POOL_SOCKET" --json 2>/dev/null |
+    jq -e '.[0].idle >= 1' >/dev/null 2>&1; then
+    READY=1
+    break
+  fi
+  sleep 2
+done
+[[ "$READY" == 1 ]] || { echo "dsh-acp did not become ready" >&2; exit 1; }
+
+exec 3<>"$WORK/acp.in"
+exec 4<>"$WORK/acp.out"
+"$KBOX" pool attach --socket "$POOL_SOCKET" <"$WORK/acp.in" >"$WORK/acp.out" 3>&- 4>&- &
+ACP_PID=$!
+
+RPC_RESPONSE=""
+REPLY=""
+rpc() {
+  local id="$1" payload="$2" timeout="$3" line chunk
+  printf '%s\n' "$payload" >&3
+  while IFS= read -r -t "$timeout" -u 4 line; do
+    [[ "$line" == \{* ]] || continue
+    if jq -e --argjson id "$id" '.id? == $id' >/dev/null 2>&1 <<<"$line"; then
+      if jq -e 'has("error")' >/dev/null 2>&1 <<<"$line"; then
+        jq -r '.error.message // "ACP request failed"' >&2 <<<"$line"
+        return 1
+      fi
+      RPC_RESPONSE="$line"
+      return 0
+    fi
+    chunk="$(jq -rj 'select(.method? == "session/update") |
+      .params.update | select(.sessionUpdate == "agent_message_chunk") |
+      .content | select(.type == "text") | .text // empty' <<<"$line")"
+    [[ -z "$chunk" ]] || { printf '%s' "$chunk"; REPLY="$REPLY$chunk"; }
+  done
+  echo "ACP request $id timed out or disconnected" >&2
+  return 1
+}
+
+rpc 1 '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}' 30
+AGENT="$(jq -r '.result.agentInfo.name' <<<"$RPC_RESPONSE")"
+rpc 2 "$(jq -nc '{jsonrpc:"2.0",id:2,method:"session/new",params:{cwd:"/workspace",mcpServers:[]}}')" 30
+SESSION_ID="$(jq -r '.result.sessionId' <<<"$RPC_RESPONSE")"
+MODEL_VALUE="$(jq -nc --arg provider "$DSH_PROVIDER" --arg model "$DSH_MODEL" '[$provider,$model]')"
+rpc 3 "$(jq -nc --arg session "$SESSION_ID" --arg value "$MODEL_VALUE" \
+  '{jsonrpc:"2.0",id:3,method:"session/set_config_option",params:{sessionId:$session,configId:"model",value:$value}}')" 30
+jq -e --arg value "$MODEL_VALUE" \
+  '[.result.configOptions[] | select(.id == "model" and .currentValue == $value)] | length == 1' \
+  >/dev/null <<<"$RPC_RESPONSE"
+rpc 4 "$(jq -nc --arg session "$SESSION_ID" --arg value "$DSH_REASONING_EFFORT" \
+  '{jsonrpc:"2.0",id:4,method:"session/set_config_option",params:{sessionId:$session,configId:"reasoning_effort",value:$value}}')" 30
+jq -e --arg value "$DSH_REASONING_EFFORT" \
+  '[.result.configOptions[] | select(.id == "reasoning_effort" and .currentValue == $value)] | length == 1' \
+  >/dev/null <<<"$RPC_RESPONSE"
+
+printf 'Connected: %s\nModel: %s/%s (reasoning: %s)\nYou: %s\n%s: ' \
+  "$AGENT" "$DSH_PROVIDER" "$DSH_MODEL" "$DSH_REASONING_EFFORT" "$GREETING" "$AGENT"
+rpc 5 "$(jq -nc --arg session "$SESSION_ID" --arg text "$GREETING" \
+  '{jsonrpc:"2.0",id:5,method:"session/prompt",params:{sessionId:$session,prompt:[{type:"text",text:$text}]}}')" 240
+STOP_REASON="$(jq -r '.result.stopReason' <<<"$RPC_RESPONSE")"
+[[ -n "$REPLY" && "$STOP_REASON" == "end_turn" ]] || { echo "invalid model response" >&2; exit 1; }
+printf '\n(stop: %s)\n' "$STOP_REASON"
+exec 3>&-
+wait "$ACP_PID"
+printf 'ACP exit code: 0\n'
+BASH
 ```
 
-`DSH_MODEL` accepts a model id such as `deepseek-flash` or `deepseek-v4-pro`, or an exact `provider/model` route. `DSH_REASONING_EFFORT` accepts an effort advertised by the selected model; the current DeepSeek models support `off`, `low`, `high`, and `max`. Omit either variable to use the configured default. The command verifies the selected model and effort through standard ACP configuration before sending the prompt.
+`DSH_MODEL` accepts a model id such as `deepseek-flash` or `deepseek-v4-pro`, or an exact `provider/model` route. `DSH_REASONING_EFFORT` accepts an effort advertised by the selected model; current DeepSeek models support `off`, `low`, `high`, and `max`. `GREETING` overrides the default greeting. The command verifies the selected model and effort through standard ACP configuration before sending the prompt.
 
 ## Integrate a TUI / GUI client
 
@@ -109,14 +214,7 @@ For a TUI/GUI, start the pool before launching the client and configure its agen
 }
 ```
 
-Use `kbox pool stop` to stop the daemon and its pooled VMs. Without a background pool, use `kbox run -i --rm` as shown above. To exercise the full protocol and a live model reply, run this from a kbox source checkout while the pool is running:
-
-```sh
-DSH_MODEL=deepseek-flash DSH_REASONING_EFFORT=low \
-REUSE_POOL=1 RUNS=5 sh dist/bench-pool-dsh-acp.sh
-```
-
-The benchmark sends a default Chinese greeting, performs `initialize → session/new → session/prompt`, and verifies model text, `stopReason`, and the exit code. It reports startup and initialize timings separately from model network latency.
+Use `kbox pool stop` to stop the daemon and its pooled VMs. Without a background pool, use `kbox run -i --rm` as shown above. The complete [Hello world command](#hello-world-send-a-greeting-get-a-live-model-reply) shows every ACP request and verifies a live model reply. The measurements below separately record startup and initialize timings apart from model network latency.
 
 Measured on macOS arm64 with kbox 3.2.7 on 2026-11-06. Five real DeepSeek sessions using `deepseek-flash` and `low` all returned text, `end_turn`, and exit code 0. Tested image digest: `sha256:4237b8ac59d8ad1fb89ce065877fdd8d02f9114c17412cca8163d4276242fea5`.
 
