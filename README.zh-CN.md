@@ -4,7 +4,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 ACP-only 发行版：一个通过 stdio 使用 [Agent Client Protocol](https://agentclientprotocol.com)（JSON-RPC）通信的 DeepSeek agent，任何兼容 ACP 的 TUI、GUI 或编辑器都可以驱动它。
 
-保留 agent 循环、会话持久化、模型适配、工具执行与 MCP 支持；桌面、Web、实验性、网站与 Python SDK 包均已移除。
+提供 agent 循环、会话持久化、模型适配、工具执行与 MCP 支持。
 
 公开容器镜像：[`ghcr.io/kense-labs/dsh-acp`](https://github.com/orgs/kense-labs/packages/container/dsh-acp)，匿名拉取、无需登录。
 
@@ -16,8 +16,6 @@
 - stdout 只用于 ACP 协议流量，诊断信息走 stderr。
 - 会话与附件保存在 `DSH_HOME`（容器镜像内为 `/data`），进程重建后通过 `session/list`、`session/resume` 恢复历史。
 - 默认模型为 `deepseek-flash`（`deepseek-official` 路由），用 `DEEPSEEK_API_KEY` 提供密钥。
-
-注意：镜像发布在组织级 GitHub Packages。在 dsh-acp 仓库主页的 Packages 区域看不到它，是因为包尚未关联到该仓库；上面的组织级包页面始终可用。
 
 ## 用 kbox 运行（推荐）
 
@@ -87,7 +85,7 @@ pnpm start
 
 ```sh
 pnpm test                 # mock 模型的 ACP 协议测试
-pnpm run typecheck        # 编译保留的 TypeScript 项目图
+pnpm run typecheck        # 编译 TypeScript 项目图
 pnpm dsh --profile acp --dump-default-config
 ```
 

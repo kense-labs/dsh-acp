@@ -2,7 +2,7 @@
 
 An ACP-only distribution of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a DeepSeek agent that speaks the [Agent Client Protocol](https://agentclientprotocol.com) over stdio, so any ACP-compatible TUI, GUI, or editor can drive it.
 
-It keeps the agent loop, session persistence, model adapters, tool execution, and MCP support. Desktop, Web, experimental, website, and Python SDK packages are excluded.
+Includes the agent loop, session persistence, model adapters, tool execution, and MCP support.
 
 English | [简体中文](README.zh-CN.md)
 
@@ -90,7 +90,7 @@ Useful commands:
 
 ```sh
 pnpm test                 # ACP protocol tests with an in-memory mock model
-pnpm run typecheck        # compile all retained TypeScript projects
+pnpm run typecheck        # compile the TypeScript project graph
 pnpm dsh --profile acp --dump-default-config
 ```
 
