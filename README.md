@@ -64,6 +64,19 @@ Point your ACP client's agent command at kbox. For example, as a generic client 
 
 The client spawns a fresh isolated VM per session and the VM disappears on disconnect. Expect roughly 20–25 s of VM startup on the first launch; subsequent launches reuse cached images.
 
+## Faster startup with the kbox warm pool (one-shot commands)
+
+For non-interactive commands, a kbox warm pool cuts startup from ~22 s (cold VM boot) to **0.19–0.26 s** measured on macOS arm64 (5 warm-pool hits running `dsh-acp --version`):
+
+```sh
+kbox pool start --deferred \
+  --image ghcr.io/kense-labs/dsh-acp:latest --size 1 --max 2
+kbox pool status --json          # wait until idle >= 1
+kbox pool run --exec -- node /app/apps/cli/lib/bin.js --version
+```
+
+The pool accelerates one-shot commands only: `pool run` does not forward interactive stdin, so ACP client sessions must keep using `kbox run -i --rm` as shown above. A miss (no idle VM) costs the same as a cold boot.
+
 ## ACP surface
 
 Implemented with `@agentclientprotocol/sdk` 1.4.0:

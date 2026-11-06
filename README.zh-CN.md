@@ -59,6 +59,19 @@ kbox run -i --rm \
 
 客户端每次会话启动一个全新隔离 VM，断开后 VM 自动回收。
 
+## 用预热池加速启动（一次性命令）
+
+对于非交互命令，kbox 预热池可将启动从冷启动约 22 秒降至 **0.19–0.26 秒**（macOS arm64 实测，5 次预热命中执行 `dsh-acp --version`）：
+
+```sh
+kbox pool start --deferred \
+  --image ghcr.io/kense-labs/dsh-acp:latest --size 1 --max 2
+kbox pool status --json          # 等待 idle >= 1
+kbox pool run --exec -- node /app/apps/cli/lib/bin.js --version
+```
+
+预热池只加速一次性命令：`pool run` 不转发交互式 stdin，ACP 客户端会话仍需使用上文的 `kbox run -i --rm`。预热未命中（无空闲 VM）时耗时与冷启动相当。
+
 ## ACP 能力
 
 基于 `@agentclientprotocol/sdk` 1.4.0：
