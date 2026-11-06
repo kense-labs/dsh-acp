@@ -50,6 +50,7 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 // Side-effect type import: declaration-merges the approval waterfall answered below.
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { supportsAcpImagePrompts } from './content.ts'
+import { reportKboxPrewarmReady } from './prewarm.ts'
 import { AcpMcpConfigError } from './mcp.ts'
 import { AcpModelConfigError } from './model-control.ts'
 import { AcpSession } from './session.ts'
@@ -103,6 +104,10 @@ export function apply(ctx: Context, config: AcpConfig): void {
   const activating = new Set<SessionId>()
   let closed = false
   let imagePromptEnabled = false
+  // Resolve model capabilities while the process is being prewarmed, not on the
+  // client's first initialize request. The promise is owned by this ACP instance.
+  const imagePromptsReady = supportsAcpImagePrompts(ctx, config.provider, config.model)
+    .then((enabled) => { imagePromptEnabled = enabled })
 
   /** Return the bridge-owned record for an agent, rejecting same-id impostors. */
   const ownedRecord = (agent: Parameters<AcpSession['owns']>[0]): AcpSession | undefined => {
@@ -179,7 +184,7 @@ export function apply(ctx: Context, config: AcpConfig): void {
     async initialize(_params: InitializeRequest): Promise<InitializeResponse> {
       // Single-version agent: the spec's "same version if supported, else
       // the latest supported" both resolve to this server's one version.
-      imagePromptEnabled = await supportsAcpImagePrompts(ctx, config.provider, config.model)
+      await imagePromptsReady
       return {
         protocolVersion: PROTOCOL_VERSION,
         agentInfo: { name: 'deepseek-harness-acp', version: '0.0.1' },
@@ -390,6 +395,9 @@ export function apply(ctx: Context, config: AcpConfig): void {
     .onNotification(methods.agent.session.cancel, ({ params }) => implementation.cancel(params))
   const connection = app.connect(stream)
   const conn: AgentContext = connection.client
+  // Readiness means both the stdio connection and the capabilities used by the
+  // first initialize response are complete. Stdout remains JSON-RPC only.
+  void imagePromptsReady.then(() => { reportKboxPrewarmReady() })
 
   let quiescing: Promise<void> | undefined
   const quiesce = (): Promise<void> => {

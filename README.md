@@ -48,25 +48,16 @@ For repeatable deployments, pin the image digest instead of `latest`.
 
 ## Hello world: send a greeting, get a live model reply
 
-The repository ships a zero-dependency example that starts the VM, performs the ACP handshake, sends one greeting (customizable), and streams the model's reply:
+From a kbox source checkout, run one shell command to create a temporary process-prewarmed pool, complete the ACP handshake, send the default Chinese greeting, print the live model reply and metrics, and stop the pool:
 
 ```sh
-git clone https://github.com/kense-labs/dsh-acp.git
-cd dsh-acp
-export DEEPSEEK_API_KEY=your_key
-python3 examples/acp_hello.py
-# or your own greeting: python3 examples/acp_hello.py "Say hello in English"
+DEEPSEEK_API_KEY=your_key \
+DSH_MODEL=deepseek-flash \
+DSH_REASONING_EFFORT=low \
+RUNS=1 sh dist/bench-pool-dsh-acp.sh
 ```
 
-Example run (actual output, DeepSeek live API):
-
-```text
-Starting ghcr.io/kense-labs/dsh-acp:latest in kbox (first VM boot takes ~20 s)...
-Connected: deepseek-harness-acp 0.0.1
-You: 你好！请用一句话介绍你自己。
-dsh-acp: 你好！我是 DeepSeek Harness 驱动的编码智能体，可以帮你阅读代码、编写与调试程序、执行命令，并通过网络检索资料来完成开发任务。
-(stop: end_turn)
-```
+`DSH_MODEL` accepts a model id such as `deepseek-flash` or `deepseek-v4-pro`, or an exact `provider/model` route. `DSH_REASONING_EFFORT` accepts an effort advertised by the selected model; the current DeepSeek models support `off`, `low`, `high`, and `max`. Omit either variable to use the configured default. The command verifies the selected model and effort through standard ACP configuration before sending the prompt.
 
 ## Integrate a TUI / GUI client
 
@@ -88,18 +79,55 @@ Point your ACP client's agent command at kbox. For example, as a generic client 
 
 The client spawns a fresh isolated VM per session and the VM disappears on disconnect. Expect roughly 20–25 s of VM startup on the first launch; subsequent launches reuse cached images.
 
-## Faster startup with the kbox warm pool (one-shot commands)
+## Faster startup with kbox process prewarming
 
-For non-interactive commands, a kbox warm pool cuts startup from ~22 s (cold VM boot) to **0.19–0.26 s** measured on macOS arm64 (5 warm-pool hits running `dsh-acp --version`):
+Process prewarming is opt-in. Start the pool in a separate terminal to keep isolated MicroVMs and initialized dsh-acp processes ready:
 
 ```sh
-kbox pool start --deferred \
-  --image ghcr.io/kense-labs/dsh-acp:latest --size 1 --max 2
+export DEEPSEEK_API_KEY=your_key
+
+kbox pool start --deferred --prewarm \
+  --image ghcr.io/kense-labs/dsh-acp:latest \
+  --size 1 --max 2 --ttl 0 \
+  -u root \
+  -v dsh-acp-data:/data \
+  -v "$PWD:/workspace" \
+  -e DEEPSEEK_API_KEY
+
 kbox pool status --json          # wait until idle >= 1
-kbox pool run --exec -- node /app/apps/cli/lib/bin.js --version
+kbox pool attach
 ```
 
-The pool accelerates one-shot commands only: `pool run` does not forward interactive stdin, so ACP client sessions must keep using `kbox run -i --rm` as shown above. A miss (no idle VM) costs the same as a cold boot.
+`idle >= 1` means a VM, its ACP connection, and model capability resolution are ready. `pool attach` forwards the client's stdin/stdout to that process and returns its real exit code. Each attachment consumes a separate VM and process: disconnecting destroys that VM, and the daemon replenishes the pool. A miss waits for a new VM and process to initialize.
+
+For a TUI/GUI, start the pool before launching the client and configure its agent command as:
+
+```json
+{
+  "command": "kbox",
+  "args": ["pool", "attach"]
+}
+```
+
+Use `kbox pool stop` to stop the daemon and its pooled VMs. Without a background pool, use `kbox run -i --rm` as shown above. To exercise the full protocol and a live model reply, run this from a kbox source checkout while the pool is running:
+
+```sh
+DSH_MODEL=deepseek-flash DSH_REASONING_EFFORT=low \
+REUSE_POOL=1 RUNS=5 sh dist/bench-pool-dsh-acp.sh
+```
+
+The benchmark sends a default Chinese greeting, performs `initialize → session/new → session/prompt`, and verifies model text, `stopReason`, and the exit code. It reports startup and initialize timings separately from model network latency.
+
+Measured on macOS arm64 with kbox 3.2.7 on 2026-11-06. Five real DeepSeek sessions using `deepseek-flash` and `low` all returned text, `end_turn`, and exit code 0. Tested image digest: `sha256:4237b8ac59d8ad1fb89ce065877fdd8d02f9114c17412cca8163d4276242fea5`.
+
+| Metric | Min | Median | Max |
+| --- | ---: | ---: | ---: |
+| Complete kbox CLI spawn → initialize response | 15.066 ms | 19.368 ms | 28.955 ms |
+| `initialize` request RTT | 13.822 ms | 17.642 ms | 27.502 ms |
+| Daemon-internal attach setup (not full startup) | 0.222 ms | 0.251 ms | 0.313 ms |
+| Model prompt RTT (network, not startup) | 676.883 ms | 1436.499 ms | 1676.068 ms |
+
+Sub-millisecond daemon handoff does not mean that complete CLI startup or `initialize` takes 1 ms.
 
 ## ACP surface
 

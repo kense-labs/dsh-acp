@@ -43,25 +43,16 @@ kbox run -i --rm \
 
 ## Hello world：发一条问候，收到模型真实回复
 
-仓库内置零依赖示例脚本：自动启动 VM、完成 ACP 握手、发送一条问候（可自定义），并流式打印模型回复：
+在 kbox 源码目录执行一条 shell 命令，即可创建临时进程预热池、完成 ACP 握手、发送默认中文问候、打印模型真实回复与耗时，并在结束后停止预热池：
 
 ```sh
-git clone https://github.com/kense-labs/dsh-acp.git
-cd dsh-acp
-export DEEPSEEK_API_KEY=你的密钥
-python3 examples/acp_hello.py
-# 自定义问候：python3 examples/acp_hello.py "用英文打个招呼"
+DEEPSEEK_API_KEY=你的密钥 \
+DSH_MODEL=deepseek-flash \
+DSH_REASONING_EFFORT=low \
+RUNS=1 sh dist/bench-pool-dsh-acp.sh
 ```
 
-实际运行输出（DeepSeek 线上 API）：
-
-```text
-Starting ghcr.io/kense-labs/dsh-acp:latest in kbox (first VM boot takes ~20 s)...
-Connected: deepseek-harness-acp 0.0.1
-You: 你好！请用一句话介绍你自己。
-dsh-acp: 你好！我是 DeepSeek Harness 驱动的编码智能体，可以帮你阅读代码、编写与调试程序、执行命令，并通过网络检索资料来完成开发任务。
-(stop: end_turn)
-```
+`DSH_MODEL` 支持 `deepseek-flash`、`deepseek-v4-pro` 等模型 ID，也支持精确的 `provider/model` 路由。`DSH_REASONING_EFFORT` 使用所选模型公布的思考强度；当前 DeepSeek 模型支持 `off`、`low`、`high`、`max`。省略任一变量即使用对应默认配置。命令会在发送问候前，通过标准 ACP 配置接口设置并验证模型与思考强度。
 
 ## 接入 TUI / GUI 客户端
 
@@ -83,18 +74,55 @@ dsh-acp: 你好！我是 DeepSeek Harness 驱动的编码智能体，可以帮�
 
 客户端每次会话启动一个全新隔离 VM，断开后 VM 自动回收。
 
-## 用预热池加速启动（一次性命令）
+## 用 kbox 进程预热加速启动
 
-对于非交互命令，kbox 预热池可将启动从冷启动约 22 秒降至 **0.19–0.26 秒**（macOS arm64 实测，5 次预热命中执行 `dsh-acp --version`）：
+进程预热由用户显式启用。在单独终端启动预热池，保持隔离 MicroVM 和已初始化的 dsh-acp 进程待命：
 
 ```sh
-kbox pool start --deferred \
-  --image ghcr.io/kense-labs/dsh-acp:latest --size 1 --max 2
+export DEEPSEEK_API_KEY=你的密钥
+
+kbox pool start --deferred --prewarm \
+  --image ghcr.io/kense-labs/dsh-acp:latest \
+  --size 1 --max 2 --ttl 0 \
+  -u root \
+  -v dsh-acp-data:/data \
+  -v "$PWD:/workspace" \
+  -e DEEPSEEK_API_KEY
+
 kbox pool status --json          # 等待 idle >= 1
-kbox pool run --exec -- node /app/apps/cli/lib/bin.js --version
+kbox pool attach
 ```
 
-预热池只加速一次性命令：`pool run` 不转发交互式 stdin，ACP 客户端会话仍需使用上文的 `kbox run -i --rm`。预热未命中（无空闲 VM）时耗时与冷启动相当。
+`idle >= 1` 表示 VM、ACP 连接和模型能力解析均已 ready。`pool attach` 将客户端 stdin/stdout 双向转发给该进程，并返回真实退出码。每次接管消耗一个独立的 VM＋进程；断开后销毁该 VM，守护进程自动补池。未命中空闲实例时，需要等待新 VM 和进程完成初始化。
+
+TUI/GUI 用户先启动预热池，再将客户端的 agent 命令配置为：
+
+```json
+{
+  "command": "kbox",
+  "args": ["pool", "attach"]
+}
+```
+
+使用 `kbox pool stop` 停止守护进程及池内 VM。不需要后台池时，使用上文的 `kbox run -i --rm`。预热池运行期间，可在 kbox 源码目录执行真实协议与模型端到端基准：
+
+```sh
+DSH_MODEL=deepseek-flash DSH_REASONING_EFFORT=low \
+REUSE_POOL=1 RUNS=5 sh dist/bench-pool-dsh-acp.sh
+```
+
+基准默认发送中文问候，完成 `initialize → session/new → session/prompt`，验证模型文本、`stopReason` 和退出码，并分别报告启动、initialize 与模型网络耗时。
+
+2026-11-06 在 macOS arm64、kbox 3.2.7 环境实测。5 次使用 `deepseek-flash`＋`low` 的真实 DeepSeek 会话均返回文本、`end_turn` 和退出码 0。实测镜像 digest：`sha256:4237b8ac59d8ad1fb89ce065877fdd8d02f9114c17412cca8163d4276242fea5`。
+
+| 指标 | 最小值 | 中位数 | 最大值 |
+| --- | ---: | ---: | ---: |
+| 完整 kbox CLI 启动到 initialize 响应 | 15.066 ms | 19.368 ms | 28.955 ms |
+| initialize 请求 RTT | 13.822 ms | 17.642 ms | 27.502 ms |
+| 守护进程内部接管（非完整启动） | 0.222 ms | 0.251 ms | 0.313 ms |
+| 模型 prompt RTT（网络请求，非启动指标） | 676.883 ms | 1436.499 ms | 1676.068 ms |
+
+守护进程内部接管低于 1 ms，不代表完整 CLI 启动或 initialize 为 1 ms。
 
 ## ACP 能力
 

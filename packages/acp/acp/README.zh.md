@@ -54,6 +54,8 @@ kind: "package-reference"
 
 `pnpm dsh --profile acp` 会启动随附的 stdio 服务器。`acp` profile 会挂载会话持久化，因此客户端可以列出、恢复和关闭持久会话。[`@deepseek-ai/dsh-subagent-acp`](../../subagent/subagent-acp/README.zh.md) 会启动同一 profile 来执行进程外委派。
 
+模型输入能力解析在 ACP 实例挂载时开始，`initialize` 等待同一操作完成。设置 `KBOX_PREWARM_READY=1` 时，服务器仅在 ACP 连接和能力解析均 ready 后通过 stderr 发布 kbox 就绪标记；stdout 始终只用于 JSON-RPC。
+
 <a id="protocol-contract"></a><a id="standard-acp-v1-surface"></a>
 ### 协议约定
 

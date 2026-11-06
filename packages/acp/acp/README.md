@@ -54,6 +54,8 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 `pnpm dsh --profile acp` starts the shipped stdio server. The `acp` profile mounts session persistence, so clients can list, resume, and close persistent sessions. [`@deepseek-ai/dsh-subagent-acp`](../../subagent/subagent-acp/README.md) starts the same profile for out-of-process delegation.
 
+Model input capability resolution starts when this ACP instance mounts, and `initialize` awaits the same operation. With `KBOX_PREWARM_READY=1`, the server announces kbox readiness on stderr only after the ACP connection and this resolution are ready; stdout remains reserved for JSON-RPC.
+
 <a id="protocol-contract"></a><a id="standard-acp-v1-surface"></a>
 ### Protocol contract
 
