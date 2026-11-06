@@ -8,8 +8,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile \
-    && pnpm run build \
-    && pnpm prune --prod
+    && pnpm run build
 
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production \
@@ -21,3 +20,4 @@ RUN mkdir -p /data /workspace && chown -R node:node /data /workspace
 USER node
 VOLUME ["/data", "/workspace"]
 ENTRYPOINT ["node", "/app/apps/cli/lib/bin.js", "--profile", "acp"]
+CMD []
