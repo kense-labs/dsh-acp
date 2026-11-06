@@ -33,7 +33,20 @@ kbox version
 
 脚本自动检测操作系统与架构，从 [GitHub Releases](https://github.com/kense-labs/kense/releases/tag/kbox-v3.2.7) 下载对应安装包、校验 SHA-256，并安装到 `~/.kbox`，无需 sudo。将上述 `PATH` 配置写入 shell 配置文件，即可在后续终端直接使用。可选环境变量：`KBOX_VERSION`（默认 `3.2.7`）、`KBOX_PREFIX`（默认 `~/.kbox`）。预编译包目前支持 macOS arm64，其他平台请按照 kbox 文档从源码构建。
 
-安装完成后启动 dsh-acp：
+### 在终端测试真实模型回复
+
+在 dsh-acp 源码根目录执行测试脚本，即可直接看到问候与模型回复：
+
+```sh
+DEEPSEEK_API_KEY=你的密钥 \
+DSH_MODEL=deepseek-flash \
+DSH_REASONING_EFFORT=low \
+RUNS=1 sh "$PWD/scripts/bench-pool-dsh-acp.sh"
+```
+
+### 通过 ACP 客户端启动 dsh-acp
+
+下面的 `kbox run -i` 是 **ACP stdio 启动命令，不是终端聊天界面**。直接在终端执行时，启动完成后会等待 JSON-RPC `initialize`，不会接受普通聊天文字。需要停止时按 Ctrl-C；如果只想看到模型回复，请执行上面的测试脚本。ACP 客户端可使用以下命令启动：
 
 ```sh
 export DEEPSEEK_API_KEY=你的密钥

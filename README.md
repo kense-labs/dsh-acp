@@ -35,7 +35,20 @@ kbox version
 
 The installer detects the operating system and architecture, downloads the matching [GitHub Release](https://github.com/kense-labs/kense/releases/tag/kbox-v3.2.7), verifies SHA-256, and installs into `~/.kbox` without sudo. Add the `PATH` line to your shell profile for future terminals. Optional installer variables: `KBOX_VERSION` (default `3.2.7`) and `KBOX_PREFIX` (default `~/.kbox`). The prebuilt package currently supports macOS arm64; other platforms should follow kbox's source-build instructions.
 
-Then start dsh-acp:
+### Test a live model reply in your terminal
+
+From the dsh-acp source root, run the test script to see a greeting and model reply immediately:
+
+```sh
+DEEPSEEK_API_KEY=your_key \
+DSH_MODEL=deepseek-flash \
+DSH_REASONING_EFFORT=low \
+RUNS=1 sh "$PWD/scripts/bench-pool-dsh-acp.sh"
+```
+
+### Launch dsh-acp from an ACP client
+
+The following `kbox run -i` command is an **ACP stdio launcher, not a terminal chat interface**. If you run it directly in a terminal, it waits for JSON-RPC `initialize` after startup and does not accept ordinary chat text. Press Ctrl-C to stop it; use the test script above if you want to see a model reply. Configure an ACP client to launch:
 
 ```sh
 export DEEPSEEK_API_KEY=your_key
