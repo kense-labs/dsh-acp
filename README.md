@@ -30,6 +30,7 @@ export DEEPSEEK_API_KEY=your_key
 
 kbox run -i --rm \
   --memory 2g \
+  -u root \
   -v dsh-acp-data:/data \
   -v "$PWD:/workspace" \
   -e DEEPSEEK_API_KEY \
@@ -38,11 +39,34 @@ kbox run -i --rm \
 
 - `-i` connects your client's stdio to the agent — this is the whole "service".
 - `--rm` removes the box when the agent exits: close the client and everything is cleaned up.
+- `-u root` runs the agent as root inside the VM so it can write to the named volume (`/data` must be writable; the volume is not owned by the image's `node` user).
 - `-v dsh-acp-data:/data` persists sessions across runs.
 - `-v "$PWD:/workspace"` mounts your project; pass `/workspace` as `cwd` in `session/new`.
 - `-e DEEPSEEK_API_KEY` inherits the key from your environment; it never enters the image.
 
 For repeatable deployments, pin the image digest instead of `latest`.
+
+## Hello world: send a greeting, get a live model reply
+
+The repository ships a zero-dependency example that starts the VM, performs the ACP handshake, sends one greeting (customizable), and streams the model's reply:
+
+```sh
+git clone https://github.com/kense-labs/dsh-acp.git
+cd dsh-acp
+export DEEPSEEK_API_KEY=your_key
+python3 examples/acp_hello.py
+# or your own greeting: python3 examples/acp_hello.py "Say hello in English"
+```
+
+Example run (actual output, DeepSeek live API):
+
+```text
+Starting ghcr.io/kense-labs/dsh-acp:latest in kbox (first VM boot takes ~20 s)...
+Connected: deepseek-harness-acp 0.0.1
+You: 你好！请用一句话介绍你自己。
+dsh-acp: 你好！我是 DeepSeek Harness 驱动的编码智能体，可以帮你阅读代码、编写与调试程序、执行命令，并通过网络检索资料来完成开发任务。
+(stop: end_turn)
+```
 
 ## Integrate a TUI / GUI client
 
@@ -52,7 +76,7 @@ Point your ACP client's agent command at kbox. For example, as a generic client 
 {
   "command": "kbox",
   "args": [
-    "run", "-i", "--rm", "--memory", "2g",
+    "run", "-i", "--rm", "--memory", "2g", "-u", "root",
     "-v", "dsh-acp-data:/data",
     "-v", "/path/to/project:/workspace",
     "-e", "DEEPSEEK_API_KEY",

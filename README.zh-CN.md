@@ -26,6 +26,7 @@ export DEEPSEEK_API_KEY=你的密钥
 
 kbox run -i --rm \
   --memory 2g \
+  -u root \
   -v dsh-acp-data:/data \
   -v "$PWD:/workspace" \
   -e DEEPSEEK_API_KEY \
@@ -34,10 +35,33 @@ kbox run -i --rm \
 
 - `-i`：把客户端 stdio 接入 agent，这就是全部"服务通道"。
 - `--rm`：agent 退出后自动删除沙箱，客户端关闭即零残留。
+- `-u root`：在 VM 内以 root 运行 agent，保证命名卷可写（`/data` 必须可写；该卷不属于镜像内的 `node` 用户）。
 - `-v dsh-acp-data:/data`：命名卷持久化会话，下次启动可恢复。
 - `-v "$PWD:/workspace"`：挂载当前项目，`session/new` 的 `cwd` 传 `/workspace`。
 - `-e DEEPSEEK_API_KEY`：从宿主环境继承密钥，不进入镜像。
 - 首次启动 VM 约需 20–25 秒，之后复用镜像缓存。生产部署建议用 digest 固定镜像版本。
+
+## Hello world：发一条问候，收到模型真实回复
+
+仓库内置零依赖示例脚本：自动启动 VM、完成 ACP 握手、发送一条问候（可自定义），并流式打印模型回复：
+
+```sh
+git clone https://github.com/kense-labs/dsh-acp.git
+cd dsh-acp
+export DEEPSEEK_API_KEY=你的密钥
+python3 examples/acp_hello.py
+# 自定义问候：python3 examples/acp_hello.py "用英文打个招呼"
+```
+
+实际运行输出（DeepSeek 线上 API）：
+
+```text
+Starting ghcr.io/kense-labs/dsh-acp:latest in kbox (first VM boot takes ~20 s)...
+Connected: deepseek-harness-acp 0.0.1
+You: 你好！请用一句话介绍你自己。
+dsh-acp: 你好！我是 DeepSeek Harness 驱动的编码智能体，可以帮你阅读代码、编写与调试程序、执行命令，并通过网络检索资料来完成开发任务。
+(stop: end_turn)
+```
 
 ## 接入 TUI / GUI 客户端
 
@@ -47,7 +71,7 @@ kbox run -i --rm \
 {
   "command": "kbox",
   "args": [
-    "run", "-i", "--rm", "--memory", "2g",
+    "run", "-i", "--rm", "--memory", "2g", "-u", "root",
     "-v", "dsh-acp-data:/data",
     "-v", "/path/to/project:/workspace",
     "-e", "DEEPSEEK_API_KEY",
