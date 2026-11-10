@@ -1,5 +1,5 @@
 import { copyFileSync, cpSync, existsSync, globSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { build } from 'esbuild'
 
 const root = process.cwd()
@@ -26,6 +26,9 @@ await build({
     name: 'workspace-bundle',
     setup(build) {
       build.onResolve({ filter: /^[^./]/ }, args => {
+        // On Windows an absolute entry point ("D:\\...") also matches /^[^./]/.
+        // Marking it external makes esbuild reject the entry point outright.
+        if (isAbsolute(args.path)) return
         if (args.path.startsWith('@deepseek-ai/') && !args.path.startsWith('@deepseek-ai/node-addon-system')) return
         return { path: args.path, external: true }
       })
