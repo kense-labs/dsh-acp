@@ -117,6 +117,10 @@ Each session permits one in-flight prompt. Admission validates the whole prompt 
 
 ### Teardown and connection ownership
 
+Embedded Host services use `ctx.acpSessionHost` to activate persisted root sessions, create and flush sessions with a reserved identity, and attach a client to a background session. Concurrent activations share one Agent. Attachment verifies the workspace and allows one client claim, while ordinary ACP resume continues to reject an already active session. Background sessions follow the same close and connection teardown lifecycle as client-created sessions.
+
+Autonomous work emits the `turn_trigger` and `turn_end` extensions through `session/update`. The trigger carries the non-human source, message identity, text, and event time. The end carries the turn number and reason so an embedding client can settle work without an open prompt request. Clients consuming these extensions must accept them in their update parser.
+
 Each session module owns its Agent handle, MCP mounts, future and turn-pinned model selections, prompt slot, update chain, and memoized close operation. Explicit close, client disconnect, and Cordis disposal use the same quiescent teardown: stop new work, cancel prompt admission and Agent activity, drain committed updates, dispose continuable descendants child-first, flush persistence, and release the owned Agent scope. A session close leaves persisted state available for list and resume, and other sessions or frontends sharing the Context remain untouched.
 
 </details>

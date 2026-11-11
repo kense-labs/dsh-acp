@@ -198,7 +198,7 @@ describe('automation-only ACP bridge', () => {
     await harness.client.closeSession({ sessionId: created.sessionId })
 
     await expect(harness.client.listSessions({})).resolves.toEqual({
-      sessions: [{ sessionId: created.sessionId, cwd: process.cwd() }],
+      sessions: [{ sessionId: created.sessionId, cwd: process.cwd(), createdAt: expect.any(Number) }],
     })
     await expect(harness.client.resumeSession({ sessionId: created.sessionId, cwd: process.cwd() }))
       .resolves.toHaveProperty('configOptions')
@@ -351,7 +351,7 @@ describe('automation-only ACP bridge', () => {
     })
   })
 
-  it('lists closed persisted sessions without presentation metadata', async () => {
+  it('lists closed persisted sessions with their creation time and without titles', async () => {
     harness = await makeBridgeHarness({ script: [textResponse('answer')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
@@ -359,7 +359,7 @@ describe('automation-only ACP bridge', () => {
     await harness.client.closeSession({ sessionId: created.sessionId })
 
     await expect(harness.client.listSessions({})).resolves.toEqual({
-      sessions: [{ sessionId: created.sessionId, cwd: process.cwd() }],
+      sessions: [{ sessionId: created.sessionId, cwd: process.cwd(), createdAt: expect.any(Number) }],
     })
   })
 
@@ -427,9 +427,9 @@ describe('automation-only ACP bridge', () => {
     await expect(harness.client.listSessions({ cwd: 'relative' })).rejects.toThrow(/absolute path/)
     await expect(harness.client.listSessions({ cwd: '/missing/filter' })).resolves.toEqual({
       sessions: [
-        { sessionId: 'fork', cwd: '/missing/filter' },
-        { sessionId: 'valid-a', cwd: '/missing/filter' },
-        { sessionId: 'valid-b', cwd: '/missing/filter' },
+        { sessionId: 'fork', cwd: '/missing/filter', createdAt: 7 },
+        { sessionId: 'valid-a', cwd: '/missing/filter', createdAt: 3 },
+        { sessionId: 'valid-b', cwd: '/missing/filter', createdAt: 3 },
       ],
     })
     await expect(harness.client.resumeSession({
@@ -530,7 +530,7 @@ describe('automation-only ACP bridge', () => {
       harness = await makeBridgeHarness({ persistenceRoot, script: [textResponse('after restart')] })
       await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
       await expect(harness.client.listSessions({})).resolves.toEqual({
-        sessions: [{ sessionId: created.sessionId, cwd: process.cwd() }],
+        sessions: [{ sessionId: created.sessionId, cwd: process.cwd(), createdAt: expect.any(Number) }],
       })
       await harness.client.resumeSession({ sessionId: created.sessionId, cwd: process.cwd(), mcpServers: [] })
       await expect(harness.client.prompt({
