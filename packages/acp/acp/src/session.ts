@@ -18,7 +18,14 @@ import { AcpContentError, admitAcpPrompt } from './content.ts'
 import { turnEndToStopReason } from './codec.ts'
 import { mountAcpMcpServers } from './mcp.ts'
 import { AcpModelControl } from './model-control.ts'
-import { assistantUpdates, toolCallUpdate, toolResultUpdate } from './updates.ts'
+import {
+  assistantUpdates,
+  toolCallUpdate,
+  toolResultUpdate,
+  turnEndUpdate,
+  turnTriggerUpdate,
+  type ExtendedSessionUpdate,
+} from './updates.ts'
 
 /** Subagent completion and teardown without depending on the subagent package. */
 interface SubagentLifecycle {
@@ -323,12 +330,20 @@ export class AcpSession {
       this.inflight.endReason = undefined
     }
     try {
-      if (event.type === 'assistant/message') {
+      if (event.type === 'user/message') {
+        const update = turnTriggerUpdate(event)
+        if (update !== undefined) {
+          this.enqueueNotify(update, 'turn-trigger')
+        }
+      } else if (event.type === 'assistant/message') {
         const inflight = this.inflight?.turn === event.data.turn ? this.inflight : undefined
         const previous = this.outputTail
         const delivery = previous.then(async () => {
           for (const update of await assistantUpdates(this.ctx, session, event)) {
-            await this.notify({ sessionId: this.agent.session.id, update })
+            await this.notify({
+              sessionId: this.agent.session.id,
+              update: update as ExtendedSessionUpdate as never,
+            })
           }
         })
         this.outputTail = delivery.catch((error: unknown) => {
@@ -337,26 +352,22 @@ export class AcpSession {
           this.ctx.logger.warn(`acp: assistant output conversion failed: ${errorChain(error)}`)
         })
       } else if (event.type === 'tool/call') {
-        const previous = this.outputTail
-        this.outputTail = previous
-          .then(() => this.notify({ sessionId: this.agent.session.id, update: toolCallUpdate(event) }))
-          /* v8 ignore start -- the bridge notifier contains transport rejection. */
-          .catch((error: unknown) => {
-            this.ctx.logger.warn(`acp: tool-call update delivery failed: ${errorChain(error)}`)
-          })
-        /* v8 ignore stop */
+        this.enqueueNotify(toolCallUpdate(event), 'tool-call')
       } else if (event.type === 'tool/result') {
         const previous = this.outputTail
         this.outputTail = previous
           .then(async () => this.notify({
             sessionId: this.agent.session.id,
-            update: await toolResultUpdate(this.ctx, event),
+            update: await toolResultUpdate(this.ctx, event) as ExtendedSessionUpdate as never,
           }))
           /* v8 ignore start -- supplemental-content conversion failure is contained and cannot fail Agent work. */
           .catch((error: unknown) => {
             this.ctx.logger.warn(`acp: tool-result update delivery failed: ${errorChain(error)}`)
           })
         /* v8 ignore stop */
+      } else if (event.type === 'turn/end') {
+        // Always project turn boundaries so clients can close autonomous goal rounds.
+        this.enqueueNotify(turnEndUpdate(event), 'turn-end')
       }
     } finally {
       const inflight = this.inflight
@@ -365,6 +376,21 @@ export class AcpSession {
         inflight.agentError = undefined
       }
     }
+  }
+
+  /** Queue one session/update notification behind the prior output tail. */
+  private enqueueNotify(update: ExtendedSessionUpdate, label: string): void {
+    const previous = this.outputTail
+    this.outputTail = previous
+      .then(() => this.notify({
+        sessionId: this.agent.session.id,
+        update: update as never,
+      }))
+      /* v8 ignore start -- the bridge notifier contains transport rejection. */
+      .catch((error: unknown) => {
+        this.ctx.logger.warn(`acp: ${label} update delivery failed: ${errorChain(error)}`)
+      })
+    /* v8 ignore stop */
   }
 
   /**

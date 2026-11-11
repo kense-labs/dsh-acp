@@ -46,7 +46,7 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-session-persistence'
+import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 // Side-effect type import: declaration-merges the approval waterfall answered below.
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { supportsAcpImagePrompts } from './content.ts'
@@ -56,6 +56,22 @@ import { AcpModelConfigError } from './model-control.ts'
 import { AcpSession } from './session.ts'
 
 const DEFAULT_SESSION_LIST_PAGE_SIZE = 100
+
+/** In-process session access for Host services that deliver work independently of a client prompt. */
+interface AcpSessionHost {
+  /** Resolve the owned Agent, restoring a persisted root session when needed; concurrent opens share one activation. */
+  activate(sessionId: SessionId): Promise<AcpSession['agent']>
+  /** Create and flush a root session with the exact reserved id; an existing id or a failed flush rejects. */
+  create(sessionId: SessionId, cwd: string): Promise<AcpSession['agent']>
+  /** Attach one client to a background session after workspace validation, or resume an inactive session. */
+  openForClient(sessionId: SessionId, cwd: string): Promise<ResumeSessionResponse>
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    acpSessionHost: AcpSessionHost
+  }
+}
 
 export const name = 'acp'
 /** Core services required by the standard automation controls. */
@@ -69,6 +85,11 @@ function invalidParams(detail: string): RequestError {
 /** Preserve failed-turn detail; plain handler errors become a generic wire internal error. */
 function internalError(detail: string): RequestError {
   return RequestError.internalError(undefined, detail)
+}
+
+function rethrowMcpError(error: unknown): never {
+  if (error instanceof AcpMcpConfigError) throw invalidParams(error.message)
+  throw error
 }
 
 /** Plugin config: the provider/model selection used for each ACP-created agent. */
@@ -101,7 +122,10 @@ export function apply(ctx: Context, config: AcpConfig): void {
   const logger = ctx.logger
   const sessionListPageSize = resolveSessionListPageSize(config.sessionListPageSize)
   const sessions = new Map<SessionId, AcpSession>()
-  const activating = new Set<SessionId>()
+  const activating = new Map<SessionId, Promise<ResumeSessionResponse>>()
+  const backgroundSessions = new Set<SessionId>()
+  const closing = new Map<SessionId, Promise<void>>()
+  const lifetime = new AbortController()
   let closed = false
   let imagePromptEnabled = false
   // Resolve model capabilities while the process is being prewarmed, not on the
@@ -123,6 +147,103 @@ export function apply(ctx: Context, config: AcpConfig): void {
     const record = sessions.get(sessionId)
     if (record === undefined) throw invalidParams(`unknown session: ${sessionId}`)
     return record
+  }
+
+  function startActivation(
+    sessionId: SessionId,
+    open: () => Promise<ResumeSessionResponse>,
+  ): Promise<ResumeSessionResponse> {
+    assertOpen()
+    if (sessions.has(sessionId) || activating.has(sessionId) || ctx.sessions.get(sessionId) !== undefined) {
+      throw invalidParams(`session is already active: ${sessionId}`)
+    }
+    const pending = Promise.resolve().then(open).finally(() => { activating.delete(sessionId) })
+    activating.set(sessionId, pending)
+    return pending
+  }
+
+  async function registerSession(
+    record: AcpSession,
+    signal: AbortSignal,
+    fresh: boolean,
+    background: boolean,
+  ): Promise<ResumeSessionResponse> {
+    const { session } = record.agent
+    try {
+      signal.throwIfAborted()
+      assertOpen()
+      sessions.set(session.id, record)
+      const configOptions = await record.configOptions(signal)
+      // The attached log writer's flush materializes an empty session durably.
+      if (fresh && !await ctx.sessions.flush(session) && background) {
+        throw internalError('session persistence did not acknowledge creation')
+      }
+      signal.throwIfAborted()
+      assertOpen()
+      if (closing.has(session.id) || sessions.get(session.id) !== record) {
+        throw invalidParams(`session closed during activation: ${session.id}`)
+      }
+      if (background) backgroundSessions.add(session.id)
+      return { configOptions }
+    } catch (error: unknown) {
+      try {
+        await record.close('ACP session activation failed')
+      } finally {
+        if (sessions.get(session.id) === record) sessions.delete(session.id)
+      }
+      throw error
+    }
+  }
+
+  function createSession(
+    sessionId: SessionId,
+    params: NewSessionRequest,
+    signal: AbortSignal,
+    background = false,
+  ): Promise<ResumeSessionResponse> {
+    validateWorkspaceParams(params)
+    return startActivation(sessionId, async () => {
+      signal.throwIfAborted()
+      if (background && await persistence.stat(sessionId, { signal }) !== undefined) {
+        throw invalidParams(`session already exists: ${sessionId}`)
+      }
+      // The ACP profile provides model-facing rows at the Host level.
+      const record = await AcpSession.create(ctx, {
+        sessionId, cwd: params.cwd, mcpServers: params.mcpServers,
+        agentOptions: agentOptions(config), signal, notify,
+      }).catch(rethrowMcpError)
+      return registerSession(record, signal, true, background)
+    })
+  }
+
+  function resumeSession(
+    sessionId: SessionId,
+    params: ResumeSessionRequest | undefined,
+    signal: AbortSignal,
+  ): Promise<ResumeSessionResponse> {
+    if (params !== undefined) validateWorkspaceParams(params)
+    return startActivation(sessionId, async () => {
+      const persisted = (await persistence.stat(sessionId, { signal }))?.header
+      if (persisted === undefined && params === undefined) {
+        throw new SessionPersistenceNotFoundError(sessionId)
+      }
+      if (persisted === undefined || persisted.origin === 'subagent') {
+        throw invalidParams(`session is not resumable: ${sessionId}`)
+      }
+      const cwd = params?.cwd ?? persisted.cwd
+      if (cwd === undefined || !isAbsolute(cwd) || !await sameDirectory(persisted.cwd, cwd)) {
+        throw invalidParams(`session cwd does not match: ${String(cwd)}`)
+      }
+      const record = await AcpSession.resume(ctx, {
+        sessionId, cwd, mcpServers: params?.mcpServers ?? [],
+        agentOptions: agentOptions(config), signal, notify,
+      }).catch(rethrowMcpError)
+      if (!await sameDirectory(record.agent.session.header.cwd, cwd)) {
+        await record.close('session/resume cwd mismatch')
+        throw invalidParams(`session cwd does not match: ${cwd}`)
+      }
+      return registerSession(record, signal, false, params === undefined)
+    })
   }
 
   /** Send one ordered protocol update while containing transport-only failure. */
@@ -202,97 +323,12 @@ export function apply(ctx: Context, config: AcpConfig): void {
     },
 
     async newSession(params: NewSessionRequest, signal: AbortSignal): Promise<NewSessionResponse> {
-      assertOpen()
-      validateWorkspaceParams(params)
       const sessionId = brandString<SessionId>(randomUUID())
-      // No preset composition: the ACP bundle keeps the model-facing rows in
-      // the host plane, so this agent reads them from the global layer. A
-      // deployment that configures a roster has to join one here first
-      // (@deepseek-ai/dsh-agent-preset-registry README, "Composing a child agent").
-      let record: AcpSession
-      try {
-        record = await AcpSession.create(ctx, {
-          sessionId,
-          cwd: params.cwd,
-          mcpServers: params.mcpServers,
-          agentOptions: agentOptions(config),
-          signal,
-          notify,
-        })
-      } catch (error: unknown) {
-        if (error instanceof AcpMcpConfigError) throw invalidParams(error.message)
-        throw error
-      }
-      /* v8 ignore next 4 -- a real stdio close can race an in-flight create. */
-      if (closed) {
-        await record.close('connection closed during session/new')
-        throw internalError('connection closed during session/new')
-      }
-      sessions.set(sessionId, record)
-      try {
-        const configOptions = await record.configOptions(signal)
-        assertOpen()
-        // The attached log writer's flush materializes an empty session durably.
-        await ctx.sessions.flush(record.agent.session)
-        assertOpen()
-        return { sessionId, configOptions }
-      } catch (error: unknown) {
-        sessions.delete(sessionId)
-        await record.close('session/new activation failed')
-        throw error
-      }
+      return { sessionId, ...await createSession(sessionId, params, AbortSignal.any([signal, lifetime.signal])) }
     },
 
     async resumeSession(params: ResumeSessionRequest, signal: AbortSignal): Promise<ResumeSessionResponse> {
-      assertOpen()
-      validateWorkspaceParams(params)
-      const sessionId = brandString<SessionId>(params.sessionId)
-      if (sessions.has(sessionId) || activating.has(sessionId) || ctx.sessions.get(sessionId) !== undefined) {
-        throw invalidParams(`session is already active: ${sessionId}`)
-      }
-      activating.add(sessionId)
-      return (async (): Promise<ResumeSessionResponse> => {
-        const persisted = (await persistence.stat(sessionId, { signal }))?.header
-        if (persisted === undefined || persisted.origin === 'subagent') {
-          throw invalidParams(`session is not resumable: ${sessionId}`)
-        }
-        if (!await sameDirectory(persisted.cwd, params.cwd)) {
-          throw invalidParams(`session cwd does not match: ${params.cwd}`)
-        }
-        let record: AcpSession
-        try {
-          record = await AcpSession.resume(ctx, {
-            sessionId,
-            cwd: params.cwd,
-            mcpServers: params.mcpServers ?? [],
-            agentOptions: agentOptions(config),
-            signal,
-            notify,
-          })
-        } catch (error: unknown) {
-          if (error instanceof AcpMcpConfigError) throw invalidParams(error.message)
-          throw error
-        }
-        /* v8 ignore start -- the persisted header was checked before resume; the factory restores that exact header. */
-        if (!await sameDirectory(record.agent.session.header.cwd, params.cwd)) {
-          await record.close('session/resume cwd mismatch')
-          throw invalidParams(`session cwd does not match: ${params.cwd}`)
-        }
-        /* v8 ignore stop */
-        /* v8 ignore next 4 -- a real stdio close can race an in-flight resume. */
-        if (closed) {
-          await record.close('connection closed during session/resume')
-          throw internalError('connection closed during session/resume')
-        }
-        sessions.set(sessionId, record)
-        try {
-          return { configOptions: await record.configOptions(signal) }
-        } catch (error: unknown) {
-          sessions.delete(sessionId)
-          await record.close('session/resume option discovery failed')
-          throw error
-        }
-      })().finally(() => { activating.delete(sessionId) })
+      return resumeSession(brandString<SessionId>(params.sessionId), params, AbortSignal.any([signal, lifetime.signal]))
     },
 
     async listSessions(params: ListSessionsRequest, signal: AbortSignal): Promise<ListSessionsResponse> {
@@ -330,7 +366,7 @@ export function apply(ctx: Context, config: AcpConfig): void {
       const page = remaining.slice(0, sessionListPageSize)
       const next = remaining.length > page.length ? page.at(-1) : undefined
       return {
-        sessions: page.map(({ sessionId, cwd }) => ({ sessionId, cwd })),
+        sessions: page.map(({ sessionId, cwd, createdAt }) => ({ sessionId, cwd, createdAt })),
         ...next === undefined ? {} : { nextCursor: encodeSessionListCursor(next) },
       }
     },
@@ -353,12 +389,16 @@ export function apply(ctx: Context, config: AcpConfig): void {
       assertOpen()
       const sessionId = brandString<SessionId>(params.sessionId)
       const record = requireSession(sessionId)
+      const disposed = record.close('ACP session closed')
+      closing.set(sessionId, disposed)
       try {
-        await record.close('ACP session closed')
+        await disposed
       } catch (error: unknown) {
         throw internalError(`session close failed: ${errorChain(error)}`)
       } finally {
         if (sessions.get(sessionId) === record) sessions.delete(sessionId)
+        if (closing.get(sessionId) === disposed) closing.delete(sessionId)
+        backgroundSessions.delete(sessionId)
       }
       return {}
     },
@@ -395,6 +435,55 @@ export function apply(ctx: Context, config: AcpConfig): void {
     .onNotification(methods.agent.session.cancel, ({ params }) => implementation.cancel(params))
   const connection = app.connect(stream)
   const conn: AgentContext = connection.client
+  /** Join in-flight ownership before borrowing the exact record for this id. */
+  async function withStableSession<T>(
+    sessionId: SessionId,
+    use: (record: AcpSession | undefined) => Promise<T>,
+  ): Promise<T> {
+    for (;;) {
+      assertOpen()
+      const teardown = closing.get(sessionId)
+      if (teardown !== undefined) {
+        await teardown
+        continue
+      }
+      const pending = activating.get(sessionId)
+      if (pending === undefined) return use(sessions.get(sessionId))
+      // If a client-side open failed, a Host open can still use the stored cwd.
+      await pending.catch(() => undefined)
+    }
+  }
+  ctx.provide('acpSessionHost', {
+    activate(sessionId) {
+      return withStableSession(sessionId, async (record) => {
+        if (record !== undefined) return record.agent
+        await resumeSession(sessionId, undefined, lifetime.signal)
+        return requireSession(sessionId).agent
+      })
+    },
+    async create(sessionId, cwd) {
+      await createSession(sessionId, { cwd, mcpServers: [] }, lifetime.signal, true)
+      return requireSession(sessionId).agent
+    },
+    async openForClient(sessionId, cwd) {
+      validateWorkspaceParams({ cwd })
+      return withStableSession(sessionId, async (record) => {
+        if (record === undefined) {
+          return resumeSession(sessionId, { sessionId, cwd, mcpServers: [] }, lifetime.signal)
+        }
+        if (!backgroundSessions.has(sessionId)) throw invalidParams(`session is already active: ${sessionId}`)
+        if (!await sameDirectory(record.agent.session.header.cwd, cwd)) {
+          throw invalidParams(`session cwd does not match: ${cwd}`)
+        }
+        const configOptions = await record.configOptions(lifetime.signal)
+        assertOpen()
+        if (closing.has(sessionId) || sessions.get(sessionId) !== record || !backgroundSessions.delete(sessionId)) {
+          throw invalidParams(`session ownership changed during activation: ${sessionId}`)
+        }
+        return { configOptions }
+      })
+    },
+  })
   // Readiness means both the stdio connection and the capabilities used by the
   // first initialize response are complete. Stdout remains JSON-RPC only.
   void imagePromptsReady.then(() => { reportKboxPrewarmReady() })
@@ -403,15 +492,19 @@ export function apply(ctx: Context, config: AcpConfig): void {
   const quiesce = (): Promise<void> => {
     if (quiescing !== undefined) return quiescing
     closed = true
+    lifetime.abort()
+    const openings = [...activating.values()]
     const records = [...sessions.values()]
     // AcpSession.close cancels synchronously before its first await, so every owned
     // prompt stops before any descendant or persistence drain can block.
     quiescing = (async () => {
       const disposals = await Promise.allSettled(records.map(record => record.close('ACP bridge disposed')))
+      await Promise.allSettled(openings)
       for (const record of records) {
         /* v8 ignore next -- closed blocks concurrent handlers; each captured record remains mapped until this loop. */
         if (sessions.get(record.agent.session.id) === record) sessions.delete(record.agent.session.id)
       }
+      backgroundSessions.clear()
       const failures: unknown[] = []
       for (const result of disposals) {
         if (result.status === 'rejected') failures.push(result.reason as unknown)

@@ -6,6 +6,24 @@ import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-token-meter'
 import { assistantBlockToAcp } from './content.ts'
 
+/** Host extension: waking non-human user messages projected as turn triggers. */
+export type TurnTriggerUpdate = {
+  sessionUpdate: 'turn_trigger'
+  messageId: string
+  sourceKind: string
+  content: string
+  time?: number
+}
+
+/** Host extension: durable turn boundary for clients without an open prompt RPC. */
+export type TurnEndUpdate = {
+  sessionUpdate: 'turn_end'
+  turn: number
+  reason: string
+}
+
+export type ExtendedSessionUpdate = SessionUpdate | TurnTriggerUpdate | TurnEndUpdate
+
 /**
  * Convert one committed assistant message and its context usage in block order.
  * @param ctx - bridge context carrying attachment and token-meter services.
@@ -107,5 +125,48 @@ function parseToolArguments(value: string): unknown {
     return JSON.parse(value) as unknown
   } catch (_invalidModelJson) {
     return value
+  }
+}
+
+/**
+ * Project a waking (non-human) user message as a turn-trigger card for ACP clients.
+ * Human `kind: "user"` prompts are echoed by the client composer and omitted here.
+ */
+export function turnTriggerUpdate(event: SessionEvent<'user/message'>): TurnTriggerUpdate | undefined {
+  const source = event.data.source
+  const kind = typeof source === 'object' && source !== null && 'kind' in source
+    ? String((source as { kind?: unknown }).kind ?? '')
+    : ''
+  if (!kind || kind === 'user' || kind === 'skill-catalog' || kind === 'plugin') {
+    return undefined
+  }
+  const content = Array.isArray(event.data.content)
+    ? event.data.content
+      .map((block) => {
+        if (block && typeof block === 'object' && 'type' in block && block.type === 'text'
+          && 'text' in block && typeof block.text === 'string') {
+          return block.text
+        }
+        return ''
+      })
+      .filter((text) => text.length > 0)
+      .join('\n')
+    : ''
+  if (!content.trim()) return undefined
+  return {
+    sessionUpdate: 'turn_trigger',
+    messageId: event.data.id,
+    sourceKind: kind,
+    content,
+    time: event.time,
+  }
+}
+
+/** Project a durable turn/end so clients can close autonomous goal rounds. */
+export function turnEndUpdate(event: SessionEvent<'turn/end'>): TurnEndUpdate {
+  return {
+    sessionUpdate: 'turn_end',
+    turn: event.data.turn,
+    reason: String(event.data.reason ?? 'completed'),
   }
 }
